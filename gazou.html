@@ -1,0 +1,573 @@
+<?
+/*
+This is a beta build of GazouBBS, its very buggy
+ */
+//-------------設定ここから-------------
+# 掲示板のタイトル
+$title = '画像BBS～♪';
+
+# 管理者用パスワード。必ず変更して下さい。
+$admin_pass = '4321';
+
+# ファイルをアップロードするディレクトリ
+# 最後は / にして下さい。
+$up_dir = '/gif/';
+
+# アップロードするディレクトリの絶対パス
+$path = dirname($PATH_TRANSLATED).$up_dir;
+
+# ログ保存ファイル
+$logfile = 'imglog.log';
+
+# 静的HTMLを書き出す場合のHTMLファイル
+$html_file = 'index.html';
+
+# 一ページあたりの表示記事数
+$page_def = 7;
+
+# 最大記録件数 これを越えると古い物から順に削除されます。
+$max = 200;
+
+# 画像ファイルを <IMG> タグで直接表示するかどうか 1 で表示 0 で表示しない
+$show_img = 1;
+
+# 同一ホストからの連続投稿を制限
+#  --> 秒数を記述するとその時間以上を経過しないと連続投稿できない
+$w_regist = 30;
+
+# 管理者が許可した画像のみ表示（チェックしてから：1,すべて表示：0）
+$ImageCheck = 1;
+
+# 上で1の場合、チェックされてない画像の代替画像
+$IconSoon = './soon.gif';
+
+# 画像ファイルの最大表示の大きさ（単位：ピクセル）
+#  --> これを超える画像は縮小表示します
+$MaxW = 250;    # 横幅
+$MaxH = 100;    # 縦幅
+
+# アップロード可能な最大サイズ（単位 : KB）
+#  -->PHP3.iniまたはphp3_upload_max_filesizeによりますが、
+#  デフォルト値である２メガ以上は設定できません。
+$maxbyte = 150;
+
+# 時差(hour)
+$jisa = 0;
+//---------設定ここまで--------------
+
+$maxsize = $maxbyte * 1024;    //バイトに変換
+function head(&$dat){         //ヘッダー表示部
+  global $mode,$no,$PHP_SELF,$logfile,$maxsize,$MaxW,$MaxH,$title;
+
+  if($mode == "resmsg"){    //レスの場合
+    $res = file($logfile);
+    $flag = 0;
+    while (list($key, $value) = each ($res)) {
+        list($rno,$date,$name,$mail,$sub,$com,$url) = explode("<>", $value);        
+        if ($no == "$rno"){ $flag=1; break; }
+    }
+    if ($flag == 0) error("該当記事が見つかりません");
+
+    $sub = ereg_replace("^Re", "", $sub);
+    $r_sub = "Re:[$no] $sub";
+    $r_com = "&gt; $com";
+    $r_com = eregi_replace("<br>","\r&gt; ",$r_com);
+  }
+  $dat='<html>
+<head>
+<META HTTP-EQUIV="Content-type" CONTENT="text/html; charset=Shift_JIS">
+<STYLE TYPE="text/css">
+<!--
+body,tr,td,th { font-size:10pt }
+a:hover { color:#DD0000; }
+span { font-size:20pt }
+small { font-size:8pt }
+-->
+</STYLE>
+<title>'.$title.'</title></head>
+<body bgcolor="#FFFFCC" text="#800000" link="#0000EE" vlink="#0000EE">
+<center><!--上部バナー--><P>
+<font color="#800000" face="ＭＳ Ｐゴシック" size=5><b><SPAN>'.$title.'</SPAN></b></font>
+<hr width="90%">
+[<a href="../index.html" target="_top">トップに戻る</a>]
+[<a href="">ワード検索</a>]
+[<a href="'.$PHP_SELF.'?mode=admin">管理用</a>]
+<hr width="90%">
+</center>
+<blockquote>
+<form action="'.$PHP_SELF.'" method="POST" enctype="multipart/form-data">
+<input type=hidden name=mode value="regist">
+<input type="hidden" name="MAX_FILE_SIZE" value="'.$maxsize.'">
+<table cellpadding=1 cellspacing=1>
+<tr>
+  <td><b>おなまえ</b></td>
+  <td><input type=text name=name size="28" value=""></td>
+</tr>
+<tr>
+  <td><b>Ｅメール</b></td>
+  <td><input type=text name=email size="28" value=""></td>
+</tr>
+<tr>
+  <td><b>題　　名</b></td>
+  <td>
+    <input type=text name=sub size="35" value="'.$r_sub.'">
+    <input type=submit value="送信する"><input type=reset value="リセット">
+  </td>
+</tr>
+<tr>
+  <td colspan=2>
+    <b>メッセージ</b><br>
+    <textarea name=com cols="54" rows="4" wrap=soft>'.$r_com.'</textarea>
+  </td>
+</tr>
+<tr>
+  <td><b>ＵＲＬ</b></td>
+  <td><input type=text name=url size="63" value="http://"></td>
+</tr>
+<tr>
+  <td><b>添付File</b></td>
+  <td><input type=file name=upfile size="35"></td>
+</tr>
+<tr>
+  <td><b>削除キー</b></td>
+  <td>
+    <input type=password name=pwd size=8 maxlength=8 value="">
+    <small>(記事の削除用。英数字で8文字以内)</small>
+  </td>
+</tr>
+<tr><td colspan=2>
+<small>
+<LI>添付可能ファイル ： GIF, JPG, PNG<br>
+<LI>ブラウザによっては正常に添付できないことがあります。<br>
+<LI>最大投稿データ量は '.$maxbyte.'KB までです。<br>
+<LI>画像は横 '.$MaxW.'ピクセル、縦 '.$MaxH.'ピクセルを超えると縮小表示されます。</small>
+</td></tr></table></form>
+</blockquote><hr>';
+}
+function foot(&$dat){ //フッター表示部
+    global $PHP_SELF;
+$dat.='<table align=right><tr>
+<td nowrap align=center><form action="'.$PHP_SELF.'" method="POST">
+<input type=hidden name=mode value="usrdel">
+【記事削除】<br>
+記事No<input type=text name=no size=3>
+削除キー<input type=password name=pwd size=4 maxlength=8>
+<input type=submit value="削除">
+</form></td>
+</tr></table><br clear=all>
+<center><!--下部バナー--><P><small><!-- GazouBBS v2.0 -->
+- <a href="http://php.s3.to" target="_top">GazouBBS</a> -
+</small></center>
+</body></html>';
+}
+function Main(&$dat){    //記事表示部
+  global $logfile,$page_def,$up_dir,$page,$PHP_SELF,$path,$IconSoon,$ImageCheck;
+ 
+  $view = file($logfile);
+  $logsize = sizeof($view);
+
+  if(isset($page)) $start = $page;
+  else $start = $logsize - 1;
+
+  $end = $start - $page_def + 1;
+  if($end < 0) $end = 0;
+
+  for($s = $start;$s >= $end;$s--){
+    list($no,$date,$name,$mail,$sub,$com,$url,
+        $host,$pw,$tail,$W,$H,$time2,$chk) = explode("<>", $view[$s]);
+
+    if($url) { $url = "<a href=\"http://$url\" target=\"_blank\">HOME</a>"; }
+    if($mail){ $name = "<a href=\"mailto:$mail\">$name</a>"; }
+
+    $dat.="[<b>$no</b>] <font color=\"$sub_color\"><b>$sub</b></font> ";
+    $dat.="投稿者：<b>$name</b> <small>投稿日：$date</small> ";
+    $dat.="[<a href=\"$PHP_SELF?mode=resmsg&no=$no\">Res</a>] &nbsp; $url <br>";
+    $dat.="<blockquote>$com\n";
+
+    if (file_exists("$path$time2$tail")) {
+        if ($ImageCheck && $chk != 1) {
+            $dat.="<P><img src=\"$IconSoon\">";
+        } elseif ($W && $H) {
+            $dat.="<P><a href=\".$up_dir$time2$tail\" target='_blank'><img src=\".$up_dir$time2$tail\" width=$W height=$H border=0></a>";
+        } else {
+            $dat.= "<P><a href=\".$up_dir$time2$tail\" target='_blank'><img src=\".$up_dir$time2$tail\" border=0></a>";
+        }
+    }
+    $dat.="</blockquote><hr>\n";
+    $p++;
+  } //end for
+
+  if(($logsize > $page_def) && ($p >= $page_def)){
+    $dat.="<table align=left><tr>\n";
+    $dat.="<td><form action=$PHP_SELF?page=$end method=POST>";
+    $dat.="<input type=submit value=\"次のページ\" name=submit>\n";
+    $dat.="</form></td>\n</tr></table>\n";
+  }
+}
+function regist(){    //ログ書き込み
+  global $name,$email,$sub,$com,$url,$MaxW,$MaxH,$REMOTE_HOST,$REMOTE_ADDR;
+  global $pwd,$upfile,$html_url,$logfile,$jisa,$max,$w_regist,$path;
+
+    # フォーム内容をチェック
+    if(empty($com)){ error("本文が書き込まれていません"); }
+    if(empty($sub)){ error("タイトルが記入されていません"); }
+    $times = time();
+
+    $check = file($logfile);
+    $tail = sizeof($check);
+    $last = $tail - 1;
+    list($tno,$tdate,$tname,$tmail,$tsub,$tcom,
+        $turl,$thost,$tpw,$ttail,$tw,$th,$ttime) = explode("<>", $check[$last]);
+    if($name == $tname && $com == $tcom) error("二重投稿は禁止です");
+
+    if ($w_regist && $times - $ttime < $w_regist)
+        error("連続投稿はもうしばらく時間を置いてからお願い致します");
+
+    # 記事Noを採番
+    $no = $tno + 1;
+
+    # ホスト名を取得
+    $host = $REMOTE_HOST;
+    $addr = $REMOTE_ADDR;
+    if($host == "" || $host == $addr) $host=gethostbyaddr($addr);
+
+    # 削除キーを暗号化
+    if ($pwd) { $PW = crypt(($pwd),aa); }
+
+    # URL自動リンク
+//    if ($autolink) { auto_link($com); }
+
+    # 最大記事数処理
+    if ($max < $tail) {
+      $del = file($logfile);
+      $top = $tail - $max;
+      for($j=$top; $j<=$tail; $j++){
+        list($no,$date,$name,$mail,$sub,$com,
+                $url,$host,$pw,$ex,$w,$h,$tim)= explode("<>", $del[$j]);
+        if (file_exists("$path$tim$ex")){ unlink("$path$tim$ex"); }
+        $dp = fopen ($logfile,"w");flock($dp,2);
+        fputs($dp, $del[$j]);flock($dp,3);
+        fclose($dp);
+      }
+    }
+    $now = date( "Y/m/d(D) H:i",mktime()+$jisa*60*60);
+    $url = ereg_replace( "^http://",  "",$url);
+    $sub = htmlspecialchars($sub);
+    $sub = stripslashes($sub);
+    $name = htmlspecialchars($name);
+    $name = stripslashes($name);
+    $com = htmlspecialchars($com);
+    $com = stripslashes($com);
+    $com = str_replace( "\r\n",  "\r", $com);  //改行文字の統一。 
+    $com = str_replace( "\r",  "\n", $com);   
+    $com = ereg_replace("\n((　| |\t)*\n){3,}","\n",$com);//連続する空行を一行
+    $com = nl2br($com);  //改行文字の前に<br>を代入する。
+    $com = ereg_replace( "\n",  "", $com);  //\nを文字列から消す。
+    
+    if ($upfile) { 
+        $size=UpFile();
+        $W=$size[0];$H=$size[1];
+        switch($size[2])  { 
+            case 1: 
+                $ext = ".gif";
+                break; 
+            case 2: 
+                $ext = ".jpg";
+                break; 
+            case 3: 
+                $ext = ".png";
+                break; 
+        }
+
+      # 画像表示縮小
+      if ($W > $MaxW || $H > $MaxH) {
+        $W2 = $MaxW / $W;
+        $H2 = $MaxH / $H;
+
+        if ($W2 < $H2) { $key = $W2; }
+        else { $key = $H2; }
+
+        $W = (int) $W * $key;
+        $H = (int) $H * $key;
+      }
+    }
+    $new_msg="$no<>$now<>$name<>$email<>$sub<>$com<>$url<>$host<>$PW<>$ext<>$W<>$H<>$times<><>\n";
+
+    $fp = fopen($logfile,"a");
+    flock($fp,2);
+    fputs($fp, $new_msg);
+    flock($fp,3);
+    fclose($fp);
+
+    # メール通知処理
+//    if ($mailing == 1) { mail_to(); }
+} 
+function UpFile(){    //アップロード処理
+  global    $up_dir,$upfile,$upfile_name,$path;
+
+             $source = $upfile; 
+             $source_name = $upfile_name; 
+
+       if(($source <> "none")&&($source <> "")){
+          if($uperror <> 1){
+             $dest = $path.$source_name;
+             if(copy($source,$dest)){
+                echo "成功";
+                $imagesize = getimagesize($dest); 
+
+                switch($imagesize[2])  { 
+                         case 0: 
+                            error("画像以外はアップロードできません"); 
+                            unlink($dest); 
+                            exit; 
+                         case 1: 
+                            echo " $imagesize[0] x $imagesize[1]<br>";
+                            $newname = $path; 
+                            $newname .=time() . ".gif"; 
+                            if(copy($dest,$newname)) { 
+                            echo "GIF アップ成功 <br>$newname";
+                            } else { 
+                            error("GIF リネームに失敗"); 
+                            } 
+                            unlink ($dest); 
+                            break; 
+                         case 2: 
+                              echo "$imagesize[0] x $imagesize[1]<br>";
+                            $newname = $path; 
+                            $newname .=time() . ".jpg"; 
+                            if(copy($dest,$newname)) { 
+                            echo "JPG アップ成功 <br>$newname"; 
+                            } else { 
+                            error("JPG リネームに失敗"); 
+                            } 
+                            unlink ($dest); 
+                            break; 
+                         case 3: 
+                            echo "$imagesize[0] x $imagesize[1]<br>";
+                            $newname = $path; 
+                            $newname .=time() . ".png"; 
+                            if(copy($dest,$newname)) { 
+                            echo "PNG アップ成功 <br>$newname"; 
+                            } else { 
+                            error(" PNG リネームに失敗"); 
+                            } 
+                            unlink ($dest); 
+                            break; 
+                         } 
+                  } 
+             else { 
+                error("Upload ディレクトリに書きこみ失敗\n");
+                $uperror = 1; 
+             } 
+          } 
+          unlink($source);
+       } 
+        return $imagesize;
+}
+function usrdel(){    //ユーザー削除
+    global $pwd,$no,$logfile,$path;
+  if ($no == "" || $pwd == "")
+        { error("削除Noまたは削除キーが入力モレです"); }
+
+  $logall = file($logfile);
+  $flag=0;
+
+  while(list(,$lines)=each($logall)){
+    list($o_no,$date,$name,$mail,$sub,$com,$url,$host,$pw,$tail,$w,$h,$o_tim) = explode("<>",$lines);
+        if ($no == "$o_no") { $flag=1; $PWD=$pw; $upfile="$o_tim$tail"; }
+        else { $pushlog[]=$lines; }
+  }
+
+    if ($flag == 0) { error("該当記事が見当たりません"); }
+    if ($PWD == "") { error("該当記事には削除キーが設定されていません"); }
+
+    # 削除キーを照合
+    $match = crypt(($pwd),aa);
+    if ($match != $PWD) { error("削除キーが違います"); }
+    
+    # ログを更新
+    $fp = fopen($logfile,"w");
+    flock($fp,2);
+    while(list(,$val)=each($pushlog)){
+        fputs($fp,$val);
+    }
+    flock($fp,3);
+    fclose($fp);
+
+    if(file_exists("$path$upfile")){ unlink("$path$upfile"); }
+}
+function admin(){    //管理機能
+    global $admin_pass,$PHP_SELF,$logfile,$path,$ImageCheck,$up_dir;
+    global $del,$pass,$chk;
+    if ($pass && $pass != "$pass")
+            { error("パスワードが違います"); }
+?>
+<html><html>
+<head>
+<META HTTP-EQUIV="Content-type" CONTENT="text/html; charset=Shift_JIS">
+<STYLE TYPE="text/css">
+<!--
+body,tr,td,th { font-size:9pt; }
+a:hover { color:#DD0000; }
+span { font-size:20pt; }
+small { font-size:9pt }
+-->
+</STYLE>
+<?
+  echo "<title>$title</title></head>";
+  echo "<body bgcolor=\"#FFFFCC\" text=\"#800000\">";
+  echo "[<a href=\"$PHP_SELF\?\">掲示板に戻る</a>]\n";
+  echo "<table width='100%'><tr><th bgcolor=\"#A08000\">\n";
+  echo "<font color=\"#FFFFFF\">管理モード</font>\n";
+  echo "</th></tr></table>\n";
+
+  if (!$pass) {
+    echo "<P><center><h4>パスワードを入力して下さい</h4>\n";
+    echo "<form action=\"$PHP_SELF\" method=\"POST\">\n";
+    echo "<input type=hidden name=mode value=\"admin\">\n";
+    echo "<input type=password name=pass size=8>";
+    echo "<input type=submit value=\" 認証 \"></form>\n";
+  }else {
+    # 画像許可
+    if ($chk) {
+
+      # 画像情報をマッチングし更新
+      $logall = file($logfile);
+
+        while(list(,$lines)=each($logall)){
+        list($no,$date,$name,$mail,$sub,$com,$url,$host,$pw,$tail,$w,$h,$o_tim,$check) = explode("<>",$lines);
+        if ($chk == "$no") { $lines="$no<>$date<>$name<>$mail<>$sub<>$com<>$url<>$host<>$pw<>$tail<>$w<>$h<>$o_tim<>1<>"; }
+        
+        $pushlog[]=$lines;
+        }
+            
+      # ログを更新
+      $fp = fopen($logfile,"w");
+      flock($fp,2);
+      while(list(,$val)=each($pushlog)){
+        fputs($fp,$val);
+      }
+      flock($fp,3);
+      fclose($fp);
+    }
+
+      # 削除処理
+      if ($del) {
+
+      # 削除情報をマッチングし更新
+      $delall = file($logfile);
+      
+
+        while(list(,$delline)=each($delall)){
+        $flag = 0;
+        list($no,$date,$name,$mail,$sub,$com,$url,$host,$pw,$tail,$w,$h,$time) = explode("<>",$delline);
+        if ($del == "$no") { 
+            $flag = 1;
+            if (file_exists("$path$time$tail")){ 
+                        unlink("$path$time$tail");} 
+        }
+        if($flag == 0){ $dellog[]=$delline; }
+        }
+    
+      # ログを更新
+      $fp = fopen($logfile,"w");
+      flock($fp,2);
+      while(list(,$val)=each($dellog)){
+        fputs($fp, $val);
+      }
+        flock($fp,3);
+      fclose($fp);
+    }
+
+    # 削除画面を表示
+    echo "<form action=\"$PHP_SELF\" method=\"POST\">\n";
+    echo "<input type=hidden name=mode value=\"admin\">\n";
+    echo "<input type=hidden name=pass value=\"$pass\">\n";
+    echo "<center><P>削除したい記事のチェックボックスにチェックを入れ、削除ボタンを押して下さい。\n";
+    echo "<P><table border=1 cellspacing=0>\n";
+    echo "<tr><th>削除</th><th>記事No</th><th>投稿日</th><th>題名</th>";
+    echo "<th>投稿者</th><th>コメント</th><th>ホスト名</th><th>添付<br>(Bytes)</th>";
+    if ($ImageCheck) { echo "<th>画像<br>許可</th>"; }
+    echo "</tr>\n";
+
+    $delmode = file($logfile);
+
+    while (list(,$val)=each($delmode)){
+        $img_flag=0;
+        list($no,$date,$name,$mail,$sub,$com,$url,
+                $host,$pw,$tail,$w,$h,$time,$chk) = explode("<>",$val);
+
+        list($date,$dmy) = split("\(", $date);
+        if ($mail) { $name="<a href=\"mailto:$mail\">$name</a>"; }
+        $com = str_replace("<br>","",$com);
+        $com = htmlspecialchars($com);
+        if(strlen($com) > 40){ $com = substr($com,0,38) . " ..."; }
+        
+        if (file_exists("$path$time$tail")) {
+            $img_flag = 1;
+            $clip = "<a href=\"$up_dir$time$tail\" target='_blank'>画像</a>";
+                $size = filesize("$path$time$tail");
+                $all += $size;
+            } else {
+                $clip = "";
+                $size = 0;
+        }
+
+        echo "<tr><th><input type=checkbox name=del value=\"$no\"></th>";
+        echo "<th>$no</th><td><small>$date</small></td><td>$sub</td>";
+        echo "<td><b>$name</b></td><td><small>$com</small></td>";
+        echo "<td>$host</td><td align=center>$clip<br>($size)</td>\n";
+
+        # 画像許可
+        if ($ImageCheck) {
+            if ($img_flag == 1 && $chk == 1) {
+                echo "<th><font color=red>OK</font></th>";
+            } elseif ($img_flag == 1 && $chk != 1) {
+                echo "<th><input type=checkbox name=chk value=$no></th>";
+            } else {
+                echo "<td><br></td>";
+            }
+        }
+
+        echo "</tr>\n";
+    }
+
+    echo "</table>\n";
+    echo "<P><input type=submit value=\"削除する\">";
+    echo "<input type=reset value=\"リセット\"></form>\n";
+
+    $all = (int)($all / 1024);
+    echo "【添付デ?[タ総数 ： <b>$all</b> KB】\n";
+    }
+    echo "</center>\n";
+    echo "</body></html>\n";
+    exit;
+}
+function MakeHtml(){    //HTML生成
+  global $html_file;
+
+    head($buf);
+    Main($buf);
+    foot($buf);
+
+    $hp = fopen ($html_file,"w");
+    flock($hp,2);
+    fputs($hp, $buf);
+    flock($hp,3);
+    fclose($hp);
+
+     include("$html_file");
+      exit;
+}
+function error($mes){    //エラーフォーマット
+    ?>
+<html><head>
+<meta http-equiv="Content-Type" content="text/html; charset=x-sjis"></head>
+<body bgcolor="#f9f9ce" text="#1A1A1A">
+<br><br><hr size=1><br><br>
+<center><font color=red size=5><b><? echo $mes; ?></b></font></center>
+<br><br><hr size=1></body></html>
+    <?
+    exit;
+} 
+?>
